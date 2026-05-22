@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Benim Güzel Buketim</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: radial-gradient(circle, #1a0813 0%, #050108 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        /* Giriş ve Açılış Efekti Arayüzü */
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 3, 8, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            transition: opacity 1.5s ease;
+            color: #fff;
+            text-align: center;
+        }
+        .heart-btn {
+            background: none;
+            border: 2px solid #ff4d6d;
+            color: #ff4d6d;
+            padding: 15px 35px;
+            font-size: 1.2rem;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px rgba(255, 77, 109, 0.2);
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        .heart-btn:hover {
+            background: #ff4d6d;
+            color: white;
+            box-shadow: 0 0 25px rgba(255, 77, 109, 0.6);
+            transform: scale(1.05);
+        }
+        #love-note {
+            position: absolute;
+            bottom: 10%;
+            width: 100%;
+            text-align: center;
+            color: #ffe5ec;
+            font-size: 1.5rem;
+            text-shadow: 0 0 10px rgba(255, 77, 109, 0.5);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 2s ease 1s;
+            pointer-events: none;
+            z-index: 5;
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+    </style>
+    <!-- Three.js ve OrbitControls (Kamerayı döndürmek için) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div id="overlay">
+        <h1 style="font-size: 2.5rem; margin-bottom: 10px; color: #ffe5ec;">Senin İçin Küçük Bir Sürpriz...</h1>
+        <p style="color: #a37081;">Görmek için kalbe tıkla</p>
+        <button class="heart-btn" onclick="startSurprise()">❤️ Tıkla</button>
+    </div>
+
+    <div id="love-note">Dünyanın en güzel çiçeğine, her zaman solmayacak bir buket... 🌹</div>
+    <div id="canvas-container"></div>
+
+    <script>
+        let scene, camera, renderer, controls;
+        let bouquetGroup = new THREE.Group();
+        let isAnimated = false;
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            // Sahne Kurulumu
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x1a0813, 0.05);
+
+            // Kamera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 15);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // Kontroller (Kız arkadaşın fareyle buketi döndürüp inceleyebilir)
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 1.8; // Yerin altına girmeyi engeller
+
+            // Işıklandırma (Gerçekçi gölgeler ve derinlik için)
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffe5ec, 1.2);
+            dirLight.position.set(5, 15, 5);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            const pointLight = new THREE.PointLight(0xff4d6d, 1, 10);
+            pointLight.position.set(0, 2, 2);
+            scene.add(pointLight);
+
+            // Buketi Oluştur ve Başlangıçta Görünmez/Küçük Yap (Efekt için)
+            createBouquet();
+            bouquetGroup.scale.set(0.001, 0.001, 0.001);
+            bouquetGroup.position.y = -2;
+            scene.add(bouquetGroup);
+
+            // Arka Plana Parıltı Efektleri (Partiküller)
+            createParticles();
+
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        // Matematiksel Formülle 3D Gül Yaprağı Yapısı oluşturma
+        function createRose() {
+            const roseGroup = new THREE.Group();
+
+            // Gülün Merkez Goncası
+            const budGeo = new THREE.ConeGeometry(0.4, 1.2, 16);
+            const roseMat = new THREE.MeshStandardMaterial({
+                color: 0xd90429,
+                roughness: 0.4,
+                metalness: 0.1,
+                side: THREE.DoubleSide
+            });
+            const bud = new THREE.Mesh(budGeo, roseMat);
+            bud.position.y = 0.5;
+            roseGroup.add(bud);
+
+            // Kat Kat Yapraklar
+            const petalLayers = 4;
+            for (let i = 0; i < petalLayers; i++) {
+                const petalCount = 5 + (i * 3);
+                const radius = 0.3 + (i * 0.15);
+                
+                for (let j = 0; j < petalCount; j++) {
+                    // Yapraklar için kavisli küre yüzeyleri
+                    const petalGeo = new THREE.SphereGeometry(radius, 16, 16, 0, Math.PI, 0, Math.PI / 2);
+                    
+                    // Renk geçişi simülasyonu (Dış yapraklar biraz daha açık ton)
+                    const layerColor = new THREE.Color(0xd90429).lerp(new THREE.Color(0xff4d6d), i / petalLayers);
+                    const petalMat = new THREE.MeshStandardMaterial({
+                        color: layerColor,
+                        roughness: 0.5,
+                        metalness: 0.05,
+                        side: THREE.DoubleSide
+                    });
+
+                    const petal = new THREE.Mesh(petalGeo, petalMat);
+                    
+                    const angle = (j / petalCount) * Math.PI * 2;
+                    petal.position.set(Math.cos(angle) * (radius * 0.5), radius * 0.4, Math.sin(angle) * (radius * 0.5));
+                    
+                    petal.rotation.x = Math.PI / 2 + (i * 0.15);
+                    petal.rotation.y = -angle + Math.PI / 2;
+                    petal.rotation.z = (Math.random() - 0.5) * 0.2;
+
+                    roseGroup.add(petal);
+                }
+            }
+
+            // Sap Kısmı
+            const stemGeo = new THREE.CylinderGeometry(0.04, 0.04, 4, 8);
+            const stemMat = new THREE.MeshStandardMaterial({ color: 0x2d6a4f, roughness: 0.8 });
+            const stem = new THREE.Mesh(stemGeo, stemMat);
+            stem.position.y = -1.8;
+            roseGroup.add(stem);
+
+            // Yapraklar
+            const leafGeo = new THREE.ConeGeometry(0.2, 0.6, 4);
+            const leaf = new THREE.Mesh(leafGeo, stemMat);
+            leaf.position.set(0.2, -1, 0);
+            leaf.rotation.z = -Math.PI / 4;
+            roseGroup.add(leaf);
+
+            return roseGroup;
+        }
+
+        // Buketi bir araya getirme (Çiçekleri dairesel dizme)
+        function createBouquet() {
+            const roseCount = 19; // Anlamlı bir sayı veya yoğun durması için 19 adet gül
+            
+            for (let i = 0; i < roseCount; i++) {
+                const rose = createRose();
+                
+                // Merkezde bir tane, diğerleri etrafında katmanlar halinde
+                if (i > 0) {
+                    const layer = i < 7 ? 1 : 2;
+                    const countInLayer = layer === 1 ? 6 : 12;
+                    const indexInLayer = layer === 1 ? i - 1 : i - 7;
+                    
+                    const angle = (indexInLayer / countInLayer) * Math.PI * 2;
+                    const radius = layer * 0.8;
+                    
+                    rose.position.set(Math.cos(angle) * radius, (2.5 - layer * 0.3) - 2, Math.sin(angle) * radius);
+                    
+                    // Çiçekleri hafifçe dışa doğru bükerek doğal buket formu verme
+                    rose.rotation.z = -Math.cos(angle) * (0.15 * layer);
+                    rose.rotation.x = Math.sin(angle) * (0.15 * layer);
+                } else {
+                    rose.position.set(0, 0.8, 0); // Merkezdeki en tepedeki gül
+                }
+                bouquetGroup.add(rose);
+            }
+
+            // Buket Ambalajı / Kağıdı (Konik yapı)
+            const wrapGeo = new THREE.ConeGeometry(2.5, 4, 32, 1, true);
+            const wrapMat = new THREE.MeshStandardMaterial({
+                color: 0xffccd5,
+                roughness: 0.6,
+                metalness: 0.1,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.85
+            });
+            const wrapper = new THREE.Mesh(wrapGeo, wrapMat);
+            wrapper.position.y = -1.8;
+            wrapper.rotation.x = Math.PI;
+            bouquetGroup.add(wrapper);
+        }
+
+        // Arka plan parıltıları
+        function createParticles() {
+            const pGeo = new THREE.BufferGeometry();
+            const pCount = 200;
+            const coords = new Float32Array(pCount * 3);
+
+            for(let i=0; i<pCount*3; i+=3) {
+                coords[i] = (Math.random() - 0.5) * 20;
+                coords[i+1] = (Math.random() - 0.5) * 20 + 2;
+                coords[i+2] = (Math.random() - 0.5) * 20;
+            }
+
+            pGeo.setAttribute('position', new THREE.BufferAttribute(coords, 3));
+            const pMat = new THREE.PointsMaterial({
+                size: 0.08,
+                color: 0xffb3c1,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            const particles = new THREE.Points(pGeo, pMat);
+            scene.add(particles);
+        }
+
+        // Açılış Efektini Tetikleyen Fonksiyon
+        function startSurprise() {
+            document.getElementById('overlay').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('overlay').style.display = 'none';
+                isAnimated = true;
+                // Yazının belirmesi
+                document.getElementById('love-note').style.opacity = '1';
+                document.getElementById('love-note').style.transform = 'translateY(0)';
+            }, 1500);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Render ve Animasyon Döngüsü
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Açılış Büyüme Efekti (Scale up)
+            if (isAnimated && bouquetGroup.scale.x < 1) {
+                bouquetGroup.scale.x += 0.01;
+                bouquetGroup.scale.y += 0.01;
+                bouquetGroup.scale.z += 0.01;
+            }
+
+            // Buketin kendi ekseninde çok hafif ve asilce dönmesi
+            if (isAnimated) {
+                bouquetGroup.rotation.y += 0.003;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Sayfa yüklendiğinde başlat
+        window.onload = init;
+    </script>
+</body>
+</html>
